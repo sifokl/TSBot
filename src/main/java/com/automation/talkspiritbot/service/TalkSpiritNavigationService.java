@@ -16,20 +16,30 @@ import java.time.Duration;
 public class TalkSpiritNavigationService {
 
     private static final Logger logger = LoggerFactory.getLogger(TalkSpiritNavigationService.class);
-    private final WebDriver driver;
+    private final WebDriverService webDriverService;
+    private static final Duration TIMEOUT = Duration.ofSeconds(10); // Temps d'attente configurable
 
-    public TalkSpiritNavigationService(WebDriver driver) {
-        this.driver = driver;
+    public TalkSpiritNavigationService(WebDriverService webDriverService) {
+        this.webDriverService = webDriverService;
     }
 
     /**
-     * Closes any popups that might block navigation.
+     * Récupère le WebDriver avec une gestion centralisée.
+     */
+    private WebDriver getWebDriver() {
+        return webDriverService.getDriver();
+    }
+
+    /**
+     * Ferme les popups s'ils sont présents.
      */
     public void closePopupIfPresent() {
-        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(5));
-        By popupCloseButtonBy = By.xpath(UITagsConstants.btn_label_Fermer); // Vérifie si le sélecteur est exact
+        WebDriver driver = getWebDriver();
+        WebDriverWait wait = new WebDriverWait(driver, TIMEOUT);
+        By popupCloseButtonBy = By.xpath(UITagsConstants.btn_label_Fermer);
 
         try {
+            logger.info("Checking for popup...");
             WebElement popupCloseButton = wait.until(ExpectedConditions.elementToBeClickable(popupCloseButtonBy));
             if (popupCloseButton.isDisplayed()) {
                 popupCloseButton.click();
@@ -41,54 +51,48 @@ public class TalkSpiritNavigationService {
     }
 
     /**
-     * Navigates to the "Fil d'actualité" (News Feed).
+     * Navigue vers "Fil d'actualité".
      */
     public void goToFilActualite() {
-        closePopupIfPresent(); // Vérifie et ferme le popup avant de naviguer
-
-        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(10));
+        closePopupIfPresent();
+        WebDriver driver = getWebDriver();
+        WebDriverWait wait = new WebDriverWait(driver, TIMEOUT);
         By filActuButtonBy = By.xpath(UITagsConstants.btn_href_Actualite);
 
         try {
-            logger.info("Waiting for the News Feed button to be visible and clickable (XPath: {}).", filActuButtonBy);
-            WebElement filActuButton = wait.until(ExpectedConditions.elementToBeClickable(filActuButtonBy));
+            logger.info("Waiting for the News Feed button (XPath: {}).", filActuButtonBy);
+            WebElement filActuButton = waitForElement(filActuButtonBy);
             filActuButton.click();
             logger.info("Successfully navigated to the News Feed.");
-            waitForPageLoad(3000);
         } catch (Exception e) {
             logger.error("Failed to navigate to the News Feed. Element not found (XPath: {}).", filActuButtonBy, e);
         }
     }
 
     /**
-     * Navigates to the "Cooptations" section.
+     * Navigue vers "Cooptations".
      */
     public void goToCooptations() {
-        closePopupIfPresent(); // Vérifie et ferme le popup avant de naviguer
-
+        closePopupIfPresent();
+        WebDriver driver = getWebDriver();
         By cooptationsButtonBy = By.xpath(UITagsConstants.btn_href_Cooptation);
+
         try {
-            logger.info("Attempting to navigate to the Cooptations section (XPath: {}).", cooptationsButtonBy);
-            WebElement cooptationsButton = driver.findElement(cooptationsButtonBy);
+            logger.info("Waiting for the Cooptations button (XPath: {}).", cooptationsButtonBy);
+            WebElement cooptationsButton = waitForElement(cooptationsButtonBy);
             cooptationsButton.click();
             logger.info("Successfully navigated to the Cooptations section.");
-            waitForPageLoad(3000);
         } catch (Exception e) {
             logger.error("Failed to navigate to the Cooptations section. Element not found (XPath: {}).", cooptationsButtonBy, e);
         }
     }
 
     /**
-     * Waits for the page to load after navigation.
-     *
-     * @param milliseconds Time to wait in milliseconds.
+     * Méthode générique pour attendre qu'un élément soit visible et cliquable.
      */
-    private void waitForPageLoad(int milliseconds) {
-        try {
-            Thread.sleep(milliseconds);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            logger.error("Thread interrupted while waiting for page load.");
-        }
+    private WebElement waitForElement(By locator) {
+        WebDriver driver = getWebDriver();
+        WebDriverWait wait = new WebDriverWait(driver, TIMEOUT);
+        return wait.until(ExpectedConditions.elementToBeClickable(locator));
     }
 }

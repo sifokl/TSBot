@@ -3,6 +3,7 @@ package com.automation.talkspiritbot.controller;
 
 import com.automation.talkspiritbot.service.TalkSpiritLoginService;
 import com.automation.talkspiritbot.service.TalkSpiritNavigationService;
+import com.automation.talkspiritbot.service.WebDriverService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -16,17 +17,23 @@ public class BotController {
     private static final Logger logger = LoggerFactory.getLogger(BotController.class);
 
 
+    private final WebDriverService webDriverService;
     private final TalkSpiritLoginService loginService;
     private final TalkSpiritNavigationService navigationService;
 
-    public BotController(TalkSpiritLoginService loginService, TalkSpiritNavigationService navigationService) {
+    public BotController(TalkSpiritLoginService loginService, TalkSpiritNavigationService navigationService,  WebDriverService webDriverService) {
         this.loginService = loginService;
         this.navigationService = navigationService;
+        this.webDriverService = webDriverService;
     }
 
     @GetMapping("/start")
     public String startBot() {
+
         try {
+
+            webDriverService.getDriver();
+
             logger.info("Before Login...");
             loginService.login();
 
@@ -37,6 +44,7 @@ public class BotController {
             logger.info("Before Cooptation...");
             navigationService.goToCooptations();
 
+            webDriverService.closeDriverAfter(5000);
 
             return "Bot executed successfully  !";
         } catch (Exception e) {

@@ -9,7 +9,7 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class TalkSpiritConfig {
 
-    private static final Logger logger = LoggerFactory.getLogger(WebDriverConfig.class);
+    private static final Logger logger = LoggerFactory.getLogger(TalkSpiritConfig.class);
 
     @Value("${talkspirit.loginurl}")
     private String talkSpiritLoginUrl;

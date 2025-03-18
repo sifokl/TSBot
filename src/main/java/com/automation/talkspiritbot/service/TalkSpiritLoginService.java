@@ -14,19 +14,18 @@ import org.springframework.stereotype.Service;
 
 import java.time.Duration;
 
-import static com.automation.talkspiritbot.utils.UITagsConstants.btn_Identifiant_et_MotDePasse;
 
 @Service
 public class TalkSpiritLoginService {
 
     private static final Logger logger = LoggerFactory.getLogger(TalkSpiritLoginService.class);
 
+    private final WebDriverService webDriverService;
     private final TalkSpiritConfig talkSpiritConfig;
-    private final WebDriver driver;
     private final CredentialConfig credentialConfig;
 
-    public TalkSpiritLoginService(WebDriver driver, CredentialConfig credentialConfig, TalkSpiritConfig talkSpiritConfig) {
-        this.driver = driver;
+    public TalkSpiritLoginService(WebDriverService webDriverService, CredentialConfig credentialConfig, TalkSpiritConfig talkSpiritConfig) {
+        this.webDriverService = webDriverService;
         this.credentialConfig = credentialConfig;
         this.talkSpiritConfig = talkSpiritConfig;
     }
@@ -34,6 +33,7 @@ public class TalkSpiritLoginService {
     public void login() {
         // Load the login page
         String loginPageUrl = talkSpiritConfig.getTalkSpiritLoginUrl();
+        WebDriver driver = webDriverService.getDriver();
         driver.get(loginPageUrl);
         logger.info("Loaded login page: {}", loginPageUrl);
 
