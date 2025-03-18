@@ -3,6 +3,7 @@ package com.automation.talkspiritbot.controller;
 
 import com.automation.talkspiritbot.service.TalkSpiritLoginService;
 import com.automation.talkspiritbot.service.TalkSpiritNavigationService;
+import com.automation.talkspiritbot.service.TalkSpiritScrollService;
 import com.automation.talkspiritbot.service.WebDriverService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -20,11 +21,13 @@ public class BotController {
     private final WebDriverService webDriverService;
     private final TalkSpiritLoginService loginService;
     private final TalkSpiritNavigationService navigationService;
+    private final TalkSpiritScrollService scrollService;
 
-    public BotController(TalkSpiritLoginService loginService, TalkSpiritNavigationService navigationService,  WebDriverService webDriverService) {
+    public BotController(TalkSpiritLoginService loginService, TalkSpiritNavigationService navigationService, WebDriverService webDriverService, TalkSpiritScrollService scrollService) {
         this.loginService = loginService;
         this.navigationService = navigationService;
         this.webDriverService = webDriverService;
+        this.scrollService = scrollService;
     }
 
     @GetMapping("/start")
@@ -43,6 +46,10 @@ public class BotController {
 
             logger.info("Before Cooptation...");
             navigationService.goToCooptations();
+
+
+            logger.info("Before Scroll Down...");
+            scrollService.scrollUntilDate("20210101");
 
             webDriverService.closeDriverAfter(5000);
 
