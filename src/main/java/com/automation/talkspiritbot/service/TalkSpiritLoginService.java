@@ -2,6 +2,7 @@ package com.automation.talkspiritbot.service;
 
 import com.automation.talkspiritbot.config.CredentialConfig;
 import com.automation.talkspiritbot.config.TalkSpiritConfig;
+import com.automation.talkspiritbot.utils.UITagsConstants;
 import org.openqa.selenium.By;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
@@ -12,6 +13,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 
 import java.time.Duration;
+
+import static com.automation.talkspiritbot.utils.UITagsConstants.btn_Identifiant_et_MotDePasse;
 
 @Service
 public class TalkSpiritLoginService {
@@ -36,7 +39,7 @@ public class TalkSpiritLoginService {
 
 
         // Step 1: Wait and click on "Identifiant & Mot de passe"
-        By loginMethodButtonBy = By.xpath("//button[contains(text(),'Identifiant & Mot de passe')]");
+        By loginMethodButtonBy = By.xpath(UITagsConstants.btn_contains_Identifiant_et_MotDePasse);
         WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(10));
 
 
@@ -51,18 +54,18 @@ public class TalkSpiritLoginService {
 
         // Step 2: Wait for the email & password fields
         try {
-            WebElement emailInput = wait.until(ExpectedConditions.visibilityOfElementLocated(By.id("username")));
+            WebElement emailInput = wait.until(ExpectedConditions.visibilityOfElementLocated(By.id(UITagsConstants.username)));
             emailInput.sendKeys(credentialConfig.getEmail());
-            logger.info("Entered email in field (ID: {}).", "username");
+            logger.info("Entered email in field (ID: {}).", UITagsConstants.username);
 
-            WebElement passwordInput = wait.until(ExpectedConditions.visibilityOfElementLocated(By.id("password")));
+            WebElement passwordInput = wait.until(ExpectedConditions.visibilityOfElementLocated(By.id(UITagsConstants.password)));
             passwordInput.sendKeys(credentialConfig.getPassword());
-            logger.info("Entered password in field (ID: {}).", "password");
+            logger.info("Entered password in field (ID: {}).", UITagsConstants.password);
 
             // Step 3: Click login button
-            WebElement loginButton = wait.until(ExpectedConditions.elementToBeClickable(By.id("kc-login")));
+            WebElement loginButton = wait.until(ExpectedConditions.elementToBeClickable(By.id(UITagsConstants.btn_id_login)));
             loginButton.click();
-            logger.info("Clicked on login button (ID: {}).", "kc-login");
+            logger.info("Clicked on login button (ID: {}).", UITagsConstants.btn_id_login);
 
         } catch (Exception e) {
             logger.error("Error while filling in login credentials.", e);

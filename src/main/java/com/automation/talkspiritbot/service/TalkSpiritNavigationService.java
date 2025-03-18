@@ -1,5 +1,6 @@
 package com.automation.talkspiritbot.service;
 
+import com.automation.talkspiritbot.utils.UITagsConstants;
 import org.openqa.selenium.By;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.WebElement;
@@ -26,7 +27,7 @@ public class TalkSpiritNavigationService {
      */
     public void closePopupIfPresent() {
         WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(5));
-        By popupCloseButtonBy = By.xpath("//button[@aria-label='Fermer']"); // Vérifie si le sélecteur est exact
+        By popupCloseButtonBy = By.xpath(UITagsConstants.btn_label_Fermer); // Vérifie si le sélecteur est exact
 
         try {
             WebElement popupCloseButton = wait.until(ExpectedConditions.elementToBeClickable(popupCloseButtonBy));
@@ -46,7 +47,7 @@ public class TalkSpiritNavigationService {
         closePopupIfPresent(); // Vérifie et ferme le popup avant de naviguer
 
         WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(10));
-        By filActuButtonBy = By.xpath("//a[@href='#/l/home?type=all']");
+        By filActuButtonBy = By.xpath(UITagsConstants.btn_href_Actualite);
 
         try {
             logger.info("Waiting for the News Feed button to be visible and clickable (XPath: {}).", filActuButtonBy);
@@ -65,7 +66,7 @@ public class TalkSpiritNavigationService {
     public void goToCooptations() {
         closePopupIfPresent(); // Vérifie et ferme le popup avant de naviguer
 
-        By cooptationsButtonBy = By.xpath("//a[@href='#/l/groups/cooptations?type=all']");
+        By cooptationsButtonBy = By.xpath(UITagsConstants.btn_href_Cooptation);
         try {
             logger.info("Attempting to navigate to the Cooptations section (XPath: {}).", cooptationsButtonBy);
             WebElement cooptationsButton = driver.findElement(cooptationsButtonBy);
