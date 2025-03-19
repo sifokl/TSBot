@@ -1,5 +1,7 @@
 package com.automation.talkspiritbot.service;
 
+import com.automation.talkspiritbot.config.AppConfig;
+import com.automation.talkspiritbot.utils.DateConverterUtil;
 import org.openqa.selenium.By;
 import org.openqa.selenium.JavascriptExecutor;
 import org.openqa.selenium.WebDriver;
@@ -19,12 +21,16 @@ import java.util.List;
 @Service
 public class TalkSpiritScrollService {
 
+
+    private final AppConfig appConfig;
+    private final DateConverterUtil dateConverterUtil;
     private static final Logger logger = LoggerFactory.getLogger(TalkSpiritScrollService.class);
     private final WebDriverService webDriverService;
     private static final Duration TIMEOUT = Duration.ofSeconds(10);
-    private static final SimpleDateFormat dateFormat = new SimpleDateFormat("yyyyMMdd");
 
-    public TalkSpiritScrollService(WebDriverService webDriverService) {
+    public TalkSpiritScrollService(AppConfig appConfig, DateConverterUtil dateConverterUtil, WebDriverService webDriverService) {
+        this.appConfig = appConfig;
+        this.dateConverterUtil = dateConverterUtil;
         this.webDriverService = webDriverService;
     }
 
@@ -44,18 +50,25 @@ public class TalkSpiritScrollService {
         JavascriptExecutor jsExecutor = (JavascriptExecutor) driver;
         Actions actions = new Actions(driver);
 
-        SimpleDateFormat inputFormat = new SimpleDateFormat("yyyyMMdd"); // Format du paramètre
-        SimpleDateFormat displayedFormat = new SimpleDateFormat("dd/MM/yyyy"); // Format affiché dans le tooltip
+        SimpleDateFormat usedFormat = new SimpleDateFormat(appConfig.getDefaultDateFormat()); // Format du paramètre
 
         Date targetDate;
         try {
-            targetDate = inputFormat.parse(targetDateStr);
+            targetDate = usedFormat.parse(targetDateStr);
         } catch (ParseException e) {
             logger.error("Invalid date format: {}. Expected format: yyyyMMdd", targetDateStr, e);
             return;
         }
 
-        logger.info("Scrolling until posts older than {}", displayedFormat.format(targetDate));
+        logger.info("Scrolling until posts older than {}", usedFormat.format(targetDate));
+
+
+        // ** Move the mouse to the center of the content area before scrolling **
+        By scrollContainerBy = By.className("post__wrapper__content");
+        WebElement scrollContainer = driver.findElement(scrollContainerBy);
+        actions.moveToElement(scrollContainer).perform();
+        logger.info("Moved mouse to the main content area before scrolling.");
+
 
         boolean reachedTargetDate = false;
         boolean noMoreScroll = false;
@@ -72,29 +85,28 @@ public class TalkSpiritScrollService {
 
                 WebElement lastDateElement = dateElements.get(dateElements.size() - 1);
 
-                // 🛑 *** NOUVEAU : Simuler le hover pour récupérer la vraie date ***
-                actions.moveToElement(lastDateElement).perform();
-                Thread.sleep(1000); // Laisser le temps au tooltip d'apparaître
 
-                String exactDateStr = lastDateElement.getAttribute("title");
 
-                if (exactDateStr == null || exactDateStr.isEmpty()) {
-                    logger.warn("Exact date not available, using relative date: {}", lastDateElement.getText());
-                    continue;
-                }
+                String  dateAsTimeAgo = lastDateElement.getText(); // Si l'attribut title ne fonctionne pas, utiliser le texte brut
 
-                Date exactDate = displayedFormat.parse(exactDateStr);
+                String dateFormatted = dateConverterUtil.convertRelativeDate(dateAsTimeAgo);
 
-                logger.info("Current last visible post date: {}", displayedFormat.format(exactDate));
+                Date exactDate = usedFormat.parse(dateFormatted);
 
-                // 📌 **Arrêt si on atteint la date cible**
+
+
+                //Date exactDate = displayedFormat.parse(dateFormatted, appConfig.getDefaultDateFormat());
+
+                logger.info("Current last visible post date: {}", usedFormat.format(exactDate));
+
+                //  **Arrêt si on atteint la date cible**
                 if (!exactDate.after(targetDate)) {
-                    logger.info("Reached target date {}. Stopping scroll.", displayedFormat.format(targetDate));
+                    logger.info("Reached target date {}. Stopping scroll.", usedFormat.format(targetDate));
                     reachedTargetDate = true;
                     break;
                 }
 
-                // 📌 **Détection de fin de scroll**
+                //  **Détection de fin de scroll**
                 int currentPostCount = driver.findElements(By.xpath("//article[contains(@class, 'post__card')]")).size();
                 if (currentPostCount == lastPostCount) {
                     logger.info("No new posts loaded after scrolling. Stopping.");
@@ -107,7 +119,7 @@ public class TalkSpiritScrollService {
                 logger.error("Error while scrolling and checking date.", e);
             }
 
-            // 🔽 **Faire défiler vers le bas**
+            //  **Faire défiler vers le bas**
             jsExecutor.executeScript("window.scrollTo(0, document.body.scrollHeight)");
             try {
                 Thread.sleep(2000);
