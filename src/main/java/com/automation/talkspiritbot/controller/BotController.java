@@ -51,7 +51,7 @@ public class BotController {
             logger.info("Before Scroll Down...");
             scrollService.scrollUntilDate("20210101");
 
-            webDriverService.closeDriverAfter(5000);
+            //webDriverService.closeDriverAfter(5000);
 
             return "Bot executed successfully  !";
         } catch (Exception e) {

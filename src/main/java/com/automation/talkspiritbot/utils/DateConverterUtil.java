@@ -73,7 +73,7 @@ public class DateConverterUtil {
             amount = NUMBER_MAP.getOrDefault(numberStr, numberStr.matches("\\d+") ? Integer.parseInt(numberStr) : 1);
 
             switch (unit) {
-                case "heure" -> today = today.minusDays(1);
+                case "heure" -> today = today.minusDays(amount % 24);
                 case "jour" -> today = today.minusDays(amount);
                 case "mois" -> today = today.minusMonths(amount);
                 case "an" -> today = today.minusYears(amount);

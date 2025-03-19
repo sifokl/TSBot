@@ -2,10 +2,7 @@ package com.automation.talkspiritbot.service;
 
 import com.automation.talkspiritbot.config.AppConfig;
 import com.automation.talkspiritbot.utils.DateConverterUtil;
-import org.openqa.selenium.By;
-import org.openqa.selenium.JavascriptExecutor;
-import org.openqa.selenium.WebDriver;
-import org.openqa.selenium.WebElement;
+import org.openqa.selenium.*;
 import org.openqa.selenium.interactions.Actions;
 import org.openqa.selenium.support.ui.WebDriverWait;
 import org.slf4j.Logger;
@@ -44,13 +41,13 @@ public class TalkSpiritScrollService {
      * @param targetDateStr La date limite sous format "dd/MM/yyyy"
      */
 
+
     public void scrollUntilDate(String targetDateStr) {
         WebDriver driver = getWebDriver();
-        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(5));
         JavascriptExecutor jsExecutor = (JavascriptExecutor) driver;
         Actions actions = new Actions(driver);
 
-        SimpleDateFormat usedFormat = new SimpleDateFormat(appConfig.getDefaultDateFormat()); // Format du paramètre
+        SimpleDateFormat usedFormat = new SimpleDateFormat(appConfig.getDefaultDateFormat());
 
         Date targetDate;
         try {
@@ -62,73 +59,62 @@ public class TalkSpiritScrollService {
 
         logger.info("Scrolling until posts older than {}", usedFormat.format(targetDate));
 
-
-        // ** Move the mouse to the center of the content area before scrolling **
+        // ✅ Trouver l'élément scrollable
         By scrollContainerBy = By.className("post__wrapper__content");
         WebElement scrollContainer = driver.findElement(scrollContainerBy);
-        actions.moveToElement(scrollContainer).perform();
-        logger.info("Moved mouse to the main content area before scrolling.");
 
+        // ✅ Assurer le focus sur la zone centrale
+        actions.moveToElement(scrollContainer).click().perform();
+        logger.info("Clicked on the content area to ensure focus.");
 
+        // ✅ Scroll progressif avec contrôle de hauteur
+        int lastScrollHeight = 0;
+        int maxAttempts = 50;
         boolean reachedTargetDate = false;
         boolean noMoreScroll = false;
-        int attempts = 0;
-        int lastPostCount = 0; // Nombre d'éléments avant scroll
 
-        while (!reachedTargetDate && !noMoreScroll && attempts < 50) {
+        for (int attempt = 0; attempt < maxAttempts && !reachedTargetDate && !noMoreScroll; attempt++) {
             try {
-                List<WebElement> dateElements = driver.findElements(By.xpath("//span[contains(@class, 'showdate')]"));
-                if (dateElements.isEmpty()) {
-                    logger.warn("No date elements found. Retrying...");
-                    continue;
-                }
+                // 🔥 Vérifier la hauteur actuelle du conteneur
+                int newScrollHeight = ((Number) jsExecutor.executeScript("return arguments[0].scrollHeight;", scrollContainer)).intValue();
 
-                WebElement lastDateElement = dateElements.get(dateElements.size() - 1);
-
-
-
-                String  dateAsTimeAgo = lastDateElement.getText(); // Si l'attribut title ne fonctionne pas, utiliser le texte brut
-
-                String dateFormatted = dateConverterUtil.convertRelativeDate(dateAsTimeAgo);
-
-                Date exactDate = usedFormat.parse(dateFormatted);
-
-
-
-                //Date exactDate = displayedFormat.parse(dateFormatted, appConfig.getDefaultDateFormat());
-
-                logger.info("Current last visible post date: {}", usedFormat.format(exactDate));
-
-                //  **Arrêt si on atteint la date cible**
-                if (!exactDate.after(targetDate)) {
-                    logger.info("Reached target date {}. Stopping scroll.", usedFormat.format(targetDate));
-                    reachedTargetDate = true;
-                    break;
-                }
-
-                //  **Détection de fin de scroll**
-                int currentPostCount = driver.findElements(By.xpath("//article[contains(@class, 'post__card')]")).size();
-                if (currentPostCount == lastPostCount) {
-                    logger.info("No new posts loaded after scrolling. Stopping.");
+                if (newScrollHeight == lastScrollHeight) {
+                    logger.info("No more content to load. Stopping scroll.");
                     noMoreScroll = true;
                     break;
                 }
-                lastPostCount = currentPostCount;
+
+                // ⏬ Scroller de manière progressive
+                jsExecutor.executeScript("arguments[0].scrollTop += 500;", scrollContainer);
+                lastScrollHeight = newScrollHeight;
+
+                // 🕒 Attendre le chargement des nouveaux posts
+                Thread.sleep(2000);
+
+                // 🔍 Vérifier la date du dernier post affiché
+                List<WebElement> dateElements = driver.findElements(By.xpath("//span[contains(@class, 'showdate')]"));
+                if (!dateElements.isEmpty()) {
+                    WebElement lastDateElement = dateElements.get(dateElements.size() - 1);
+                    String dateAsTimeAgo = lastDateElement.getText();
+                    String dateFormatted = dateConverterUtil.convertRelativeDate(dateAsTimeAgo);
+                    Date exactDate = usedFormat.parse(dateFormatted);
+
+                    logger.info("Current last visible post date: {}", usedFormat.format(exactDate));
+
+                    // 📌 Arrêt si on atteint la date cible
+                    if (!exactDate.after(targetDate)) {
+                        logger.info("Reached target date {}. Stopping scroll.", usedFormat.format(targetDate));
+                        reachedTargetDate = true;
+                        break;
+                    }
+                }
 
             } catch (Exception e) {
                 logger.error("Error while scrolling and checking date.", e);
             }
-
-            //  **Faire défiler vers le bas**
-            jsExecutor.executeScript("window.scrollTo(0, document.body.scrollHeight)");
-            try {
-                Thread.sleep(2000);
-            } catch (InterruptedException e) {
-                throw new RuntimeException(e);
-            }
-            attempts++;
         }
 
         logger.info("Scrolling process completed.");
     }
+
 }
