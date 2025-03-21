@@ -1,9 +1,11 @@
 package com.automation.talkspiritbot.service;
 
 import com.automation.talkspiritbot.config.AppConfig;
+import com.automation.talkspiritbot.model.PostRecord;
 import com.automation.talkspiritbot.utils.DateConverterUtil;
 import org.openqa.selenium.*;
 import org.openqa.selenium.interactions.Actions;
+import org.openqa.selenium.support.ui.ExpectedConditions;
 import org.openqa.selenium.support.ui.WebDriverWait;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -41,11 +43,11 @@ public class TalkSpiritScrollService {
      * @param targetDateStr La date limite sous format "dd/MM/yyyy"
      */
 
-
     public void scrollUntilDate(String targetDateStr) {
         WebDriver driver = getWebDriver();
         JavascriptExecutor jsExecutor = (JavascriptExecutor) driver;
         Actions actions = new Actions(driver);
+        WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(10)); // 🆕 Wait explicite
 
         SimpleDateFormat usedFormat = new SimpleDateFormat(appConfig.getDefaultDateFormat());
 
@@ -53,68 +55,157 @@ public class TalkSpiritScrollService {
         try {
             targetDate = usedFormat.parse(targetDateStr);
         } catch (ParseException e) {
-            logger.error("Invalid date format: {}. Expected format: yyyyMMdd", targetDateStr, e);
+            logger.error("Invalid target date format: {}. Expected format: yyyyMMdd", targetDateStr, e);
             return;
         }
 
         logger.info("Scrolling until posts older than {}", usedFormat.format(targetDate));
 
-        // ✅ Trouver l'élément scrollable
+        // Aller au container central pour focus
         By scrollContainerBy = By.className("post__wrapper__content");
         WebElement scrollContainer = driver.findElement(scrollContainerBy);
-
-        // ✅ Assurer le focus sur la zone centrale
         actions.moveToElement(scrollContainer).click().perform();
         logger.info("Clicked on the content area to ensure focus.");
 
-        // ✅ Scroll progressif avec contrôle de hauteur
-        int lastScrollHeight = 0;
-        int maxAttempts = 50;
         boolean reachedTargetDate = false;
         boolean noMoreScroll = false;
+        int attempts = 0;
+        int lastPostCount = 0;
 
-        for (int attempt = 0; attempt < maxAttempts && !reachedTargetDate && !noMoreScroll; attempt++) {
+        while (!reachedTargetDate && !noMoreScroll && attempts < 100) {
+            logger.info("Attempt number: {}", attempts);
             try {
-                // 🔥 Vérifier la hauteur actuelle du conteneur
-                int newScrollHeight = ((Number) jsExecutor.executeScript("return arguments[0].scrollHeight;", scrollContainer)).intValue();
+                List<WebElement> postElements = driver.findElements(By.xpath("//article[contains(@class, 'post__card')]"));
 
-                if (newScrollHeight == lastScrollHeight) {
-                    logger.info("No more content to load. Stopping scroll.");
+                if (postElements.isEmpty()) {
+                    logger.warn("No post elements found. Retrying...");
+                    continue;
+                }
+
+                int currentValidPosts = 0;
+
+                for (WebElement postElement : postElements) {
+                    try {
+                        // 🆕 Forcer React à charger le contenu via scroll visuel
+                        jsExecutor.executeScript("arguments[0].scrollIntoView({behavior: 'instant', block: 'center'});", postElement);
+                        Thread.sleep(2000); // 🆕 Attente plus longue pour laisser le DOM se mettre à jour
+
+                        // 🆕 Tentative d’attente active que certains éléments DOM soient bien présents
+                        try {
+                            wait.until(ExpectedConditions.presenceOfNestedElementLocatedBy(
+                                    postElement, By.xpath(".//h2[@class='special-title']/a")
+                            ));
+                        } catch (TimeoutException e) {
+                            logger.warn("Le post [{}] ne contient toujours pas les sous-éléments attendus.", postElement.getAttribute("id"));
+                        }
+
+                        PostRecord post = extractPostDetails(postElement);
+
+                        logger.info("Post trouvé: [{}] | Titre: {} | Auteur: {} | Date: {}",
+                                post.id(), post.postTitle(), post.postCreator(), post.postDate());
+
+                        if (post.postDate().equalsIgnoreCase("unknown")) {
+                            logger.warn("Post non encore rendu (lazy loading ?) — ID: {}", post.id());
+                            continue;
+                        }
+
+                        currentValidPosts++;
+
+                        Date postDate = usedFormat.parse(post.postDate());
+                        if (!postDate.after(targetDate)) {
+                            logger.info("Date cible atteinte ({}). Fin du scroll.", usedFormat.format(targetDate));
+                            reachedTargetDate = true;
+                            break;
+                        }
+
+                    } catch (Exception e) {
+                        logger.warn("Erreur lors du parsing du post : {}", e.getMessage());
+                        logger.debug("Contenu HTML du post en erreur:\n{}", postElement.getAttribute("outerHTML"));
+                    }
+                }
+
+                if (currentValidPosts == 0) {
+                    logger.warn("Aucun post valide sur cette tentative. On continue à scroller...");
+                }
+
+                int currentPostCount = postElements.size();
+                if (currentPostCount == lastPostCount) {
+                    logger.info("Aucun nouveau post après scroll. Fin.");
                     noMoreScroll = true;
                     break;
                 }
 
-                // ⏬ Scroller de manière progressive
-                jsExecutor.executeScript("arguments[0].scrollTop += 500;", scrollContainer);
-                lastScrollHeight = newScrollHeight;
+                lastPostCount = currentPostCount;
 
-                // 🕒 Attendre le chargement des nouveaux posts
-                Thread.sleep(2000);
-
-                // 🔍 Vérifier la date du dernier post affiché
-                List<WebElement> dateElements = driver.findElements(By.xpath("//span[contains(@class, 'showdate')]"));
-                if (!dateElements.isEmpty()) {
-                    WebElement lastDateElement = dateElements.get(dateElements.size() - 1);
-                    String dateAsTimeAgo = lastDateElement.getText();
-                    String dateFormatted = dateConverterUtil.convertRelativeDate(dateAsTimeAgo);
-                    Date exactDate = usedFormat.parse(dateFormatted);
-
-                    logger.info("Current last visible post date: {}", usedFormat.format(exactDate));
-
-                    // 📌 Arrêt si on atteint la date cible
-                    if (!exactDate.after(targetDate)) {
-                        logger.info("Reached target date {}. Stopping scroll.", usedFormat.format(targetDate));
-                        reachedTargetDate = true;
-                        break;
-                    }
-                }
+                // 🆕 Scroll bas avec pause courte
+                jsExecutor.executeScript("arguments[0].scrollTop += 1500;", scrollContainer);
+                logger.info("Scroll effectué (bas de page).");
+                Thread.sleep(3000);
 
             } catch (Exception e) {
-                logger.error("Error while scrolling and checking date.", e);
+                logger.error("Erreur pendant le scroll/check à l’itération {}.", attempts, e);
             }
+
+            attempts++;
         }
 
-        logger.info("Scrolling process completed.");
+        logger.info("Scroll terminé.");
     }
+
+
+
+    private PostRecord extractPostDetails(WebElement postElement) {
+        String postId = postElement.getAttribute("id");
+        String postCreator = "Unknown";
+        String postDateStr = "Unknown";
+        String postTitle = "Unknown";
+        boolean hasAttachedFile = false;
+        String postLink = "";
+        String postAttachedFileName = "";
+        String postAttachedFileButtonXPath = "";
+
+        try {
+            // Créateur du post
+            WebElement creatorElement = postElement.findElement(By.xpath(".//div[@class='post__card__header__info__author']/a"));
+            postCreator = creatorElement.getText();
+
+            // Date du post
+            WebElement dateElement = postElement.findElement(By.xpath(".//span[contains(@class, 'showdate')]"));
+            String dateAsTimeAgo = dateElement.getText();
+            postDateStr = dateConverterUtil.convertRelativeDate(dateAsTimeAgo);
+
+            // Titre du post
+            WebElement titleElement = postElement.findElement(By.xpath(".//h2[@class='special-title']/a/div/span"));
+            postTitle = titleElement.getText();
+
+            // Lien du post
+            WebElement linkElement = postElement.findElement(By.xpath(".//h2[@class='special-title']/a"));
+            postLink = linkElement.getAttribute("href");
+
+            // Vérifier s'il y a une section "Pièces jointes"
+            List<WebElement> attachmentSections = postElement.findElements(By.xpath(".//div[contains(@class, 'gallery gallery--separator')]"));
+            if (!attachmentSections.isEmpty()) {
+                hasAttachedFile = true;
+
+                // Essayer de récupérer le nom du fichier attaché
+                try {
+                    WebElement fileNameElement = postElement.findElement(By.xpath(".//span[@class='gallery__caption__item__title gallery__caption__item__title--extension']"));
+                    postAttachedFileName = fileNameElement.getText();
+                } catch (NoSuchElementException e) {
+                    logger.warn("No filename found for attached file in post ID: {}", postId);
+                }
+
+                //  Générer le XPath du bouton de téléchargement
+                postAttachedFileButtonXPath = String.format("//*[@id='%s']//button[contains(@class, 'gallery__button')]", postId);
+            }
+
+
+        } catch (NoSuchElementException e) {
+            logger.warn("Some post elements were not found for post ID: {}", postId);
+        }
+
+        return new PostRecord(postId, postCreator, postDateStr, postTitle, hasAttachedFile, postLink, postAttachedFileName, postAttachedFileButtonXPath);
+    }
+
 
 }
