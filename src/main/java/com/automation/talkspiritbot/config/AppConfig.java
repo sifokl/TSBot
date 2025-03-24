@@ -11,8 +11,17 @@ public class AppConfig {
     @Value("${date.format.default}")
     private String defaultDateFormat;
 
+    @Value("${attempts.number.max}")
+    private int maxAttempts;
+
+    // ➕ Getter exposé pour le format de date
     public String getDefaultDateFormat() {
         return defaultDateFormat;
+    }
+
+    // ➕ Getter exposé pour le nombre maximum d'essais lors du scroll
+    public int getMaxAttempts() {
+        return maxAttempts;
     }
 
     /**

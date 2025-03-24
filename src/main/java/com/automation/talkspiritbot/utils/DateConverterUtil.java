@@ -3,8 +3,11 @@ package com.automation.talkspiritbot.utils;
 import com.automation.talkspiritbot.config.AppConfig;
 import org.springframework.stereotype.Component;
 
+import java.text.ParseException;
+import java.text.SimpleDateFormat;
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.util.Date;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.regex.Matcher;
@@ -19,7 +22,6 @@ public class DateConverterUtil {
         this.appConfig = appConfig;
     }
 
-    // Mapping des nombres écrits en toutes lettres vers leur valeur numérique
     private static final Map<String, Integer> NUMBER_MAP = new HashMap<>();
 
     static {
@@ -38,22 +40,11 @@ public class DateConverterUtil {
         NUMBER_MAP.put("douze", 12);
     }
 
-    /**
-     * Convertit une chaîne relative en date au format spécifié.
-     *
-     * @param relativeDateString Chaîne relative (ex: "Il y a 3 heures", "Il y a deux mois", "Il y a un an")
-     * @param format             Format de sortie (ex: "yyyyMMdd", "dd-MM-yyyy")
-     * @return Date formatée en fonction du format spécifié.
-     */
-
     public String convertRelativeDate(String relativeDateString) {
         return convertRelativeDate(relativeDateString, appConfig.getDefaultDateFormat());
     }
 
-
     public String convertRelativeDate(String relativeDateString, String format) {
-
-        // Utiliser le format par défaut si le format passé est invalide
         String dateFormat = ValidationUtil.isValidAsDateFormat(format) ? format : appConfig.getDefaultDateFormat();
         DateTimeFormatter formatter = DateTimeFormatter.ofPattern(dateFormat);
 
@@ -61,15 +52,13 @@ public class DateConverterUtil {
         int amount = 0;
         String unit = "";
 
-        // Expression régulière pour extraire le nombre et l'unité de temps
         Pattern pattern = Pattern.compile("(?i)il y a (\\d+|un|une|deux|trois|quatre|cinq|six|sept|huit|neuf|dix|onze|douze) (heure|jour|mois|an)s?");
         Matcher matcher = pattern.matcher(relativeDateString);
 
         if (matcher.find()) {
-            String numberStr = matcher.group(1).toLowerCase(); // Prend le nombre en chiffre ou en lettres
-            unit = matcher.group(2); // Prend l’unité de temps (heure, jour, mois, an)
+            String numberStr = matcher.group(1).toLowerCase();
+            unit = matcher.group(2);
 
-            // Convertit les nombres en toutes lettres en chiffres
             amount = NUMBER_MAP.getOrDefault(numberStr, numberStr.matches("\\d+") ? Integer.parseInt(numberStr) : 1);
 
             switch (unit) {
@@ -81,5 +70,22 @@ public class DateConverterUtil {
         }
 
         return today.format(formatter);
+    }
+
+    public Date convertRelativeDateAsDate(String relativeDateString) {
+        return convertRelativeDateToDate(relativeDateString, appConfig.getDefaultDateFormat());
+    }
+
+    public Date convertRelativeDateAsDate(String relativeDateString, String format) {
+        return convertRelativeDateToDate(relativeDateString, format);
+    }
+
+    private Date convertRelativeDateToDate(String relativeDateString, String format) {
+        String formattedDateStr = convertRelativeDate(relativeDateString, format);
+        try {
+            return new SimpleDateFormat(format).parse(formattedDateStr);
+        } catch (ParseException e) {
+            throw new RuntimeException("Impossible de parser la date relative : " + formattedDateStr, e);
+        }
     }
 }

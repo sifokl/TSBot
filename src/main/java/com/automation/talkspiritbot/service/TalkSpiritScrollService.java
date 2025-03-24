@@ -14,8 +14,10 @@ import org.springframework.stereotype.Service;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.time.Duration;
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
+import java.util.regex.Pattern;
 
 @Service
 public class TalkSpiritScrollService {
@@ -72,82 +74,79 @@ public class TalkSpiritScrollService {
         int attempts = 0;
         int lastPostCount = 0;
 
-        while (!reachedTargetDate && !noMoreScroll && attempts < 100) {
-            logger.info("Attempt number: {}", attempts);
-            try {
-                List<WebElement> postElements = driver.findElements(By.xpath("//article[contains(@class, 'post__card')]"));
 
-                if (postElements.isEmpty()) {
-                    logger.warn("No post elements found. Retrying...");
-                    continue;
-                }
+        List<WebElement> postElements = new ArrayList<>();
 
-                int currentValidPosts = 0;
 
-                for (WebElement postElement : postElements) {
-                    try {
-                        // 🆕 Forcer React à charger le contenu via scroll visuel
-                        jsExecutor.executeScript("arguments[0].scrollIntoView({behavior: 'instant', block: 'center'});", postElement);
-                        Thread.sleep(2000); // 🆕 Attente plus longue pour laisser le DOM se mettre à jour
-
-                        // 🆕 Tentative d’attente active que certains éléments DOM soient bien présents
-                        try {
-                            wait.until(ExpectedConditions.presenceOfNestedElementLocatedBy(
-                                    postElement, By.xpath(".//h2[@class='special-title']/a")
-                            ));
-                        } catch (TimeoutException e) {
-                            logger.warn("Le post [{}] ne contient toujours pas les sous-éléments attendus.", postElement.getAttribute("id"));
-                        }
-
-                        PostRecord post = extractPostDetails(postElement);
-
-                        logger.info("Post trouvé: [{}] | Titre: {} | Auteur: {} | Date: {}",
-                                post.id(), post.postTitle(), post.postCreator(), post.postDate());
-
-                        if (post.postDate().equalsIgnoreCase("unknown")) {
-                            logger.warn("Post non encore rendu (lazy loading ?) — ID: {}", post.id());
-                            continue;
-                        }
-
-                        currentValidPosts++;
-
-                        Date postDate = usedFormat.parse(post.postDate());
-                        if (!postDate.after(targetDate)) {
-                            logger.info("Date cible atteinte ({}). Fin du scroll.", usedFormat.format(targetDate));
-                            reachedTargetDate = true;
-                            break;
-                        }
-
-                    } catch (Exception e) {
-                        logger.warn("Erreur lors du parsing du post : {}", e.getMessage());
-                        logger.debug("Contenu HTML du post en erreur:\n{}", postElement.getAttribute("outerHTML"));
-                    }
-                }
-
-                if (currentValidPosts == 0) {
-                    logger.warn("Aucun post valide sur cette tentative. On continue à scroller...");
-                }
-
-                int currentPostCount = postElements.size();
-                if (currentPostCount == lastPostCount) {
-                    logger.info("Aucun nouveau post après scroll. Fin.");
-                    noMoreScroll = true;
-                    break;
-                }
-
-                lastPostCount = currentPostCount;
-
-                // 🆕 Scroll bas avec pause courte
-                jsExecutor.executeScript("arguments[0].scrollTop += 1500;", scrollContainer);
-                logger.info("Scroll effectué (bas de page).");
-                Thread.sleep(3000);
-
-            } catch (Exception e) {
-                logger.error("Erreur pendant le scroll/check à l’itération {}.", attempts, e);
-            }
+        while(!reachedTargetDate && !noMoreScroll && attempts<appConfig.getMaxAttempts()){
 
             attempts++;
+
+
+
+            postElements = driver.findElements(By.xpath("//article[contains(@class, 'post__card')]"));
+
+            logger.info("Nombre d'elements actuels : {}", postElements.size());
+
+            WebElement lastPost = postElements.get(postElements.size() - 1);
+
+            // Scroll pour charger le contenu du dernier post
+            jsExecutor.executeScript("arguments[0].scrollIntoView({behavior: 'instant', block: 'center'});", lastPost);
+            sleep(2000); // Attente DOM
+
+            if (postElements.isEmpty()) {
+                logger.warn("Aucun post détecté sur la page.");
+                break;
+            }
+
+            // no more scroll
+            if(postElements.size() == lastPostCount){
+                noMoreScroll=true;
+                logger.warn("Le Scroll n'est plus disponible. fin de la page");
+                //break;
+            }
+
+
+
+            // max attempts reached , leave
+            if(postElements.size()>= appConfig.getMaxAttempts()){
+                logger.warn("Nombre d'articles maximum atteint : {}", postElements.size());
+                break;
+            }
+
+
+
+            try {
+                wait.until(ExpectedConditions.presenceOfNestedElementLocatedBy(
+                        lastPost, By.xpath(".//span[contains(@class, 'showdate')]")
+                ));
+                logger.info("Lazy-loaded post date is now visible.");
+            } catch (TimeoutException e) {
+                logger.warn("Le dernier post [{}] ne contient toujours pas 'showdate'.", lastPost.getAttribute("id"));
+            }
+
+            Date lastPostDate =  dateConverterUtil.convertRelativeDateAsDate(lastPost.getText());
+
+            // target date reached , leave
+            if(lastPostDate.before(targetDate)) {
+                reachedTargetDate=true;
+                logger.warn("La date maximale est atteinte : {}", lastPostDate);
+                //break;
+            }
+
+
         }
+
+
+        List<PostRecord> posts = postElements.stream().map(this::extractPostDetails).toList();
+
+        posts.forEach(post ->
+                logger.info("Post trouvé: [{}] | Titre: {} | Auteur: {} | Date: {}",
+                        post.id(), post.postTitle(), post.postCreator(), post.postDate())
+        );
+
+
+
 
         logger.info("Scroll terminé.");
     }
@@ -207,5 +206,15 @@ public class TalkSpiritScrollService {
         return new PostRecord(postId, postCreator, postDateStr, postTitle, hasAttachedFile, postLink, postAttachedFileName, postAttachedFileButtonXPath);
     }
 
+
+    private void sleep(int ms){
+        try {
+            logger.info("Sleep {} ms", ms);
+            Thread.sleep(ms);
+        } catch (InterruptedException e) {
+            logger.error("Sleep not completed ");
+            throw new RuntimeException(e);
+        }
+    }
 
 }
