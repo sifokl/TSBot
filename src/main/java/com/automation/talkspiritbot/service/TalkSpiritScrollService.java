@@ -2,6 +2,7 @@ package com.automation.talkspiritbot.service;
 
 import com.automation.talkspiritbot.config.AppConfig;
 import com.automation.talkspiritbot.model.PostRecord;
+import com.automation.talkspiritbot.parser.TalkSpiritPostParser;
 import com.automation.talkspiritbot.utils.DateConverterUtil;
 import org.openqa.selenium.*;
 import org.openqa.selenium.interactions.Actions;
@@ -22,14 +23,15 @@ import java.util.regex.Pattern;
 @Service
 public class TalkSpiritScrollService {
 
-
+    private final TalkSpiritPostFetcher postFetcher;
     private final AppConfig appConfig;
     private final DateConverterUtil dateConverterUtil;
     private static final Logger logger = LoggerFactory.getLogger(TalkSpiritScrollService.class);
     private final WebDriverService webDriverService;
     private static final Duration TIMEOUT = Duration.ofSeconds(10);
 
-    public TalkSpiritScrollService(AppConfig appConfig, DateConverterUtil dateConverterUtil, WebDriverService webDriverService) {
+    public TalkSpiritScrollService(TalkSpiritPostFetcher postFetcher, AppConfig appConfig, DateConverterUtil dateConverterUtil, WebDriverService webDriverService) {
+        this.postFetcher = postFetcher;
         this.appConfig = appConfig;
         this.dateConverterUtil = dateConverterUtil;
         this.webDriverService = webDriverService;
@@ -137,13 +139,30 @@ public class TalkSpiritScrollService {
 
         }
 
+        postElements = postElements.stream()
+                .filter(e -> {
+                    String id = e.getAttribute("id");
+                    return id != null && id.startsWith("post_content_");
+                }).toList();
 
-        List<PostRecord> posts = postElements.stream().map(this::extractPostDetails).toList();
+        List<String> postUrls = postElements.stream()
+                .map(element -> {
+                    String rawId = element.getAttribute("id");
+                    if (rawId != null && rawId.startsWith("post_content_")) {
+                        String postId = rawId.replace("post_content_", "");
+                        String url = "https://exteam.talkspirit.com/#/l/permalink/microblog/" + postId;
+                        return url;
+                    } else {
+                        logger.warn("ID invalide ou manquant pour un post : {}", rawId);
+                        return null;
+                    }
+                })
+                .filter(url -> url != null && !url.isEmpty())
+                .toList();
 
-        posts.forEach(post ->
-                logger.info("Post trouvé: [{}] | Titre: {} | Auteur: {} | Date: {}",
-                        post.id(), post.postTitle(), post.postCreator(), post.postDate())
-        );
+
+
+        postUrls.forEach(url ->  logger.info("URL recuperée  : {} ", url));
 
 
 
@@ -153,58 +172,6 @@ public class TalkSpiritScrollService {
 
 
 
-    private PostRecord extractPostDetails(WebElement postElement) {
-        String postId = postElement.getAttribute("id");
-        String postCreator = "Unknown";
-        String postDateStr = "Unknown";
-        String postTitle = "Unknown";
-        boolean hasAttachedFile = false;
-        String postLink = "";
-        String postAttachedFileName = "";
-        String postAttachedFileButtonXPath = "";
-
-        try {
-            // Créateur du post
-            WebElement creatorElement = postElement.findElement(By.xpath(".//div[@class='post__card__header__info__author']/a"));
-            postCreator = creatorElement.getText();
-
-            // Date du post
-            WebElement dateElement = postElement.findElement(By.xpath(".//span[contains(@class, 'showdate')]"));
-            String dateAsTimeAgo = dateElement.getText();
-            postDateStr = dateConverterUtil.convertRelativeDate(dateAsTimeAgo);
-
-            // Titre du post
-            WebElement titleElement = postElement.findElement(By.xpath(".//h2[@class='special-title']/a/div/span"));
-            postTitle = titleElement.getText();
-
-            // Lien du post
-            WebElement linkElement = postElement.findElement(By.xpath(".//h2[@class='special-title']/a"));
-            postLink = linkElement.getAttribute("href");
-
-            // Vérifier s'il y a une section "Pièces jointes"
-            List<WebElement> attachmentSections = postElement.findElements(By.xpath(".//div[contains(@class, 'gallery gallery--separator')]"));
-            if (!attachmentSections.isEmpty()) {
-                hasAttachedFile = true;
-
-                // Essayer de récupérer le nom du fichier attaché
-                try {
-                    WebElement fileNameElement = postElement.findElement(By.xpath(".//span[@class='gallery__caption__item__title gallery__caption__item__title--extension']"));
-                    postAttachedFileName = fileNameElement.getText();
-                } catch (NoSuchElementException e) {
-                    logger.warn("No filename found for attached file in post ID: {}", postId);
-                }
-
-                //  Générer le XPath du bouton de téléchargement
-                postAttachedFileButtonXPath = String.format("//*[@id='%s']//button[contains(@class, 'gallery__button')]", postId);
-            }
-
-
-        } catch (NoSuchElementException e) {
-            logger.warn("Some post elements were not found for post ID: {}", postId);
-        }
-
-        return new PostRecord(postId, postCreator, postDateStr, postTitle, hasAttachedFile, postLink, postAttachedFileName, postAttachedFileButtonXPath);
-    }
 
 
     private void sleep(int ms){
