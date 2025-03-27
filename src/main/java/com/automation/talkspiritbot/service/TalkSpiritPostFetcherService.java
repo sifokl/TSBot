@@ -14,27 +14,34 @@ import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import java.time.Duration;
+import java.util.List;
 
 @Service
-public class TalkSpiritPostFetcher {
-/*
-    private final WebDriver driver;
-    private final WebDriverWait wait;
+public class TalkSpiritPostFetcherService {
+
+    private final WebDriverService webDriverService;
+    private WebDriverWait wait;
     private final Logger log = LoggerFactory.getLogger(getClass());
 
     private final TalkSpiritPostParser postParser;
 
-    public TalkSpiritPostFetcher(WebDriver driver, TalkSpiritPostParser postParser) {
-        this.driver = driver;
-        this.wait = new WebDriverWait(driver, Duration.ofSeconds(10));
+    public TalkSpiritPostFetcherService( WebDriverService webDriverService, TalkSpiritPostParser postParser) {
+        this.webDriverService= webDriverService;
+        //this.wait = new WebDriverWait(webDriverService.getDriver(), Duration.ofSeconds(10));
         this.postParser = postParser;
     }
 
     /**
      * Ouvre un nouvel onglet, charge l'URL du post, le parse et retourne un PostRecord.
-     *//*
+     */
     public PostRecord fetchFromUrl(String postUrl) {
-        log.info("📥 Fetching post from URL in a new tab: {}", postUrl);
+
+
+        log.info("Fetching post from URL in a new tab: {}", postUrl);
+
+        WebDriver driver = webDriverService.getDriver();
+        wait = new WebDriverWait(driver, Duration.ofSeconds(10));
+
         String originalHandle = driver.getWindowHandle();
 
         try {
@@ -43,25 +50,40 @@ public class TalkSpiritPostFetcher {
                     .stream()
                     .filter(h -> !h.equals(originalHandle))
                     .findFirst()
-                    .orElseThrow(() -> new IllegalStateException("❌ New tab could not be opened"));
+                    .orElseThrow(() -> new IllegalStateException("New tab could not be opened"));
 
             driver.switchTo().window(newTab);
             driver.get(postUrl);
 
-            wait.until(ExpectedConditions.presenceOfElementLocated(By.cssSelector(".post")));
-            WebElement postElement = driver.findElement(By.cssSelector(".post"));
+            By articleBy = By.cssSelector("article.post__card");
+
+            wait.until(ExpectedConditions.presenceOfElementLocated(articleBy));
+            WebElement postElement = driver.findElement(articleBy);
 
             PostRecord post = postParser.extractPostDetails(postElement);
-            log.info("✅ Successfully fetched and parsed post dated {}", post.postDate());
+            log.info("Successfully fetched and parsed post dated {}", post.postDate());
             return post;
 
         } catch (Exception e) {
-            log.warn("⚠️ Failed to fetch or parse post from URL: {}", postUrl, e);
+            log.warn("Failed to fetch or parse post from URL: {}", postUrl, e);
             return null;
         } finally {
             driver.close();
             driver.switchTo().window(originalHandle);
         }
     }
-    */
+
+
+
+    /**
+     * pour un ensemble d'URLsOuvre un nouvel onglet, charge l'URL du post, le parse et retourne un PostRecord.
+     */
+    public List<PostRecord> fetchFromUrl(List<String> postUrls) {
+        log.info("Fetching all posts from {} URLs :", postUrls.size());
+
+        List<PostRecord> posts = postUrls.stream().map(this::fetchFromUrl).toList();
+
+        return posts;
+    }
+
 }

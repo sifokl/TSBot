@@ -2,7 +2,6 @@ package com.automation.talkspiritbot.service;
 
 import com.automation.talkspiritbot.config.AppConfig;
 import com.automation.talkspiritbot.model.PostRecord;
-import com.automation.talkspiritbot.parser.TalkSpiritPostParser;
 import com.automation.talkspiritbot.utils.DateConverterUtil;
 import org.openqa.selenium.*;
 import org.openqa.selenium.interactions.Actions;
@@ -18,29 +17,29 @@ import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
-import java.util.regex.Pattern;
 
 @Service
 public class TalkSpiritScrollService {
 
-    private final TalkSpiritPostFetcher postFetcher;
+    private final TalkSpiritPostFetcherService talkSpiritPostFetcherService;
     private final AppConfig appConfig;
     private final DateConverterUtil dateConverterUtil;
     private static final Logger logger = LoggerFactory.getLogger(TalkSpiritScrollService.class);
     private final WebDriverService webDriverService;
     private static final Duration TIMEOUT = Duration.ofSeconds(10);
 
-    public TalkSpiritScrollService(TalkSpiritPostFetcher postFetcher, AppConfig appConfig, DateConverterUtil dateConverterUtil, WebDriverService webDriverService) {
-        this.postFetcher = postFetcher;
+    public TalkSpiritScrollService(TalkSpiritPostFetcherService talkSpiritPostFetcherService, AppConfig appConfig, DateConverterUtil dateConverterUtil, WebDriverService webDriverService) {
+        this.talkSpiritPostFetcherService = talkSpiritPostFetcherService;
         this.appConfig = appConfig;
         this.dateConverterUtil = dateConverterUtil;
         this.webDriverService = webDriverService;
     }
 
+    /*
     private WebDriver getWebDriver() {
         return webDriverService.getDriver();
     }
-
+*/
     /**
      * Fait défiler la page jusqu'à atteindre la date limite.
      *
@@ -48,7 +47,7 @@ public class TalkSpiritScrollService {
      */
 
     public void scrollUntilDate(String targetDateStr) {
-        WebDriver driver = getWebDriver();
+        WebDriver driver = webDriverService.getDriver();
         JavascriptExecutor jsExecutor = (JavascriptExecutor) driver;
         Actions actions = new Actions(driver);
         WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(10)); // 🆕 Wait explicite
@@ -139,12 +138,14 @@ public class TalkSpiritScrollService {
 
         }
 
+        //extract all posts having id starting with pattern (all cooptation posts)
         postElements = postElements.stream()
                 .filter(e -> {
                     String id = e.getAttribute("id");
                     return id != null && id.startsWith("post_content_");
                 }).toList();
 
+        //build elements urls
         List<String> postUrls = postElements.stream()
                 .map(element -> {
                     String rawId = element.getAttribute("id");
@@ -162,10 +163,11 @@ public class TalkSpiritScrollService {
 
 
 
-        postUrls.forEach(url ->  logger.info("URL recuperée  : {} ", url));
+        //postUrls.forEach(url ->  logger.info("URL recuperée  : {} ", url));
 
+        List<PostRecord> posts =  talkSpiritPostFetcherService.fetchFromUrl(postUrls);
 
-
+        posts.forEach(post ->  logger.info("Post recuperée  : {} ", post));
 
         logger.info("Scroll terminé.");
     }
