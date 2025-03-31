@@ -18,79 +18,62 @@ public class TalkSpiritPostFetcherService {
     private final WebDriverService webDriverService;
     private final TalkSpiritPostParser postParser;
     private final Logger log = LoggerFactory.getLogger(getClass());
-    private static final int MAX_RETRIES = 3;
 
     public TalkSpiritPostFetcherService(WebDriverService webDriverService, TalkSpiritPostParser postParser) {
         this.webDriverService = webDriverService;
         this.postParser = postParser;
     }
 
-    /**
-     * Fait plusieurs tentatives pour ouvrir un post et le parser.
-     */
     public PostRecord fetchFromUrl(String postUrl) {
-        int attempts = 0;
-
-        while (attempts < MAX_RETRIES) {
-            try {
-                return internalFetch(postUrl);
-            } catch (StaleElementReferenceException | TimeoutException e) {
-                attempts++;
-                log.warn("Tentative {}/{} échouée pour {}", attempts, MAX_RETRIES, postUrl, e);
-            } catch (Exception e) {
-                log.error("Erreur inattendue lors du fetch de {}", postUrl, e);
-                break;
-            }
-        }
-
-        log.warn("Echec total après {} tentatives pour : {}", MAX_RETRIES, postUrl);
-        return null;
-    }
-
-    /**
-     * Une seule tentative pour ouvrir, charger et parser un post.
-     */
-    private PostRecord internalFetch(String postUrl) {
         log.info("Fetching post from URL in a new tab: {}", postUrl);
-
         WebDriver driver = webDriverService.getDriver();
         WebDriverWait wait = new WebDriverWait(driver, Duration.ofSeconds(10));
         String originalHandle = driver.getWindowHandle();
 
         try {
-            // Ouvre un nouvel onglet
             ((JavascriptExecutor) driver).executeScript("window.open()");
-            String newTab = driver.getWindowHandles()
-                    .stream()
+            String newTab = driver.getWindowHandles().stream()
                     .filter(h -> !h.equals(originalHandle))
                     .findFirst()
-                    .orElseThrow(() -> new IllegalStateException("Impossible d'ouvrir un nouvel onglet"));
+                    .orElseThrow(() -> new IllegalStateException("New tab could not be opened"));
 
             driver.switchTo().window(newTab);
             driver.get(postUrl);
 
-            // Attend l'article principal
-            By articleBy = By.cssSelector("article.post__card");
-            WebElement postElement = wait.until(ExpectedConditions.presenceOfElementLocated(articleBy));
+            By articleSelector = By.cssSelector("article.post__card");
+            wait.until(ExpectedConditions.visibilityOfElementLocated(articleSelector));
 
-            // Relocalise pour éviter stale reference
-            postElement = driver.findElement(articleBy);
-            PostRecord post = postParser.extractPostDetails(postElement);
-            log.info("✅ Post récupéré et parsé : {}", post.postDate());
-            return post;
+            // Réessayer jusqu’à 3 fois en cas de stale element
+            for (int attempt = 1; attempt <= 3; attempt++) {
+                try {
+                    WebElement article = driver.findElement(articleSelector);
+                    PostRecord post = postParser.extractPostDetails(article);
+                    log.info("Successfully fetched and parsed post dated {}", post.postDate());
+                    return post;
+                } catch (StaleElementReferenceException e) {
+                    log.warn("Attempt {}: Stale element reference, retrying...", attempt);
+                    Thread.sleep(500); // petite pause avant retry
+                }
+            }
 
+            log.error("Failed to fetch post after multiple attempts due to stale elements.");
+            return null;
+
+        } catch (Exception e) {
+            log.error("Erreur inattendue lors du fetch de {}", postUrl, e);
+            return null;
         } finally {
-            // Ferme l'onglet et retourne à l'onglet original
-            driver.close();
-            driver.switchTo().window(originalHandle);
+            try {
+                driver.close();
+                driver.switchTo().window(originalHandle);
+            } catch (Exception e) {
+                log.warn("Erreur lors de la fermeture de l’onglet ou du retour à l’onglet original", e);
+            }
         }
     }
 
-    /**
-     * Version batch multi-URL.
-     */
     public List<PostRecord> fetchFromUrl(List<String> postUrls) {
-        log.info("Fetching {} posts en parallèle (séquentiellement ici)", postUrls.size());
+        log.info("Fetching all posts from {} URLs :", postUrls.size());
         return postUrls.stream()
                 .map(this::fetchFromUrl)
                 .toList();

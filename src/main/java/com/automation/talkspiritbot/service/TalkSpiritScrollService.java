@@ -3,6 +3,7 @@ package com.automation.talkspiritbot.service;
 import com.automation.talkspiritbot.config.AppConfig;
 import com.automation.talkspiritbot.model.PostRecord;
 import com.automation.talkspiritbot.utils.DateConverterUtil;
+import com.automation.talkspiritbot.utils.ThreadUtil;
 import org.openqa.selenium.*;
 import org.openqa.selenium.interactions.Actions;
 import org.openqa.selenium.support.ui.ExpectedConditions;
@@ -93,7 +94,7 @@ public class TalkSpiritScrollService {
 
             // Scroll pour charger le contenu du dernier post
             jsExecutor.executeScript("arguments[0].scrollIntoView({behavior: 'instant', block: 'center'});", lastPost);
-            sleep(2000); // Attente DOM
+            ThreadUtil.sleep(2000); // Attente DOM
 
             if (postElements.isEmpty()) {
                 logger.warn("Aucun post détecté sur la page.");
@@ -176,14 +177,6 @@ public class TalkSpiritScrollService {
 
 
 
-    private void sleep(int ms){
-        try {
-            logger.info("Sleep {} ms", ms);
-            Thread.sleep(ms);
-        } catch (InterruptedException e) {
-            logger.error("Sleep not completed ");
-            throw new RuntimeException(e);
-        }
-    }
+
 
 }
