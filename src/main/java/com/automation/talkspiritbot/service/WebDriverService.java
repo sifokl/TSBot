@@ -1,6 +1,7 @@
 package com.automation.talkspiritbot.service;
 
 
+import com.automation.talkspiritbot.utils.ThreadUtil;
 import jakarta.annotation.PostConstruct;
 import org.openqa.selenium.WebDriver;
 import org.openqa.selenium.chrome.ChromeOptions;
@@ -113,13 +114,9 @@ public class WebDriverService {
     }
 
     public void closeDriverAfter(int milliseconds) {
-        try {
-            Thread.sleep(milliseconds);
-        } catch (InterruptedException e) {
-            Thread.currentThread().interrupt();
-            logger.error("Thread interrupted while waiting for page to auto-close.");
-        }
-        closeDriver();
+
+       ThreadUtil.sleep(milliseconds);
+       closeDriver();
     }
 
 

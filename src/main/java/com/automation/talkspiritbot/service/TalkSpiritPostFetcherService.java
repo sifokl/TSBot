@@ -2,6 +2,8 @@ package com.automation.talkspiritbot.service;
 
 import com.automation.talkspiritbot.model.PostRecord;
 import com.automation.talkspiritbot.parser.TalkSpiritPostParser;
+import com.automation.talkspiritbot.utils.LoginRedirectHandler;
+import com.automation.talkspiritbot.utils.ThreadUtil;
 import org.openqa.selenium.*;
 import org.openqa.selenium.support.ui.ExpectedConditions;
 import org.openqa.selenium.support.ui.WebDriverWait;
@@ -17,13 +19,14 @@ public class TalkSpiritPostFetcherService {
 
     private final WebDriverService webDriverService;
     private final TalkSpiritPostParser postParser;
+    private final LoginRedirectHandler loginRedirectHandler;
     private final Logger log = LoggerFactory.getLogger(getClass());
 
-    public TalkSpiritPostFetcherService(WebDriverService webDriverService, TalkSpiritPostParser postParser) {
+    public TalkSpiritPostFetcherService(WebDriverService webDriverService, TalkSpiritPostParser postParser, LoginRedirectHandler loginRedirectHandler) {
         this.webDriverService = webDriverService;
         this.postParser = postParser;
+        this.loginRedirectHandler = loginRedirectHandler;
     }
-
     public PostRecord fetchFromUrl(String postUrl) {
         log.info("Fetching post from URL in a new tab: {}", postUrl);
         WebDriver driver = webDriverService.getDriver();
@@ -37,33 +40,39 @@ public class TalkSpiritPostFetcherService {
                     .findFirst()
                     .orElseThrow(() -> new IllegalStateException("New tab could not be opened"));
 
+            ThreadUtil.sleepRandomBetween(1000, 3000);
+
             driver.switchTo().window(newTab);
             driver.get(postUrl);
 
             By articleSelector = By.cssSelector("article.post__card");
-            wait.until(ExpectedConditions.visibilityOfElementLocated(articleSelector));
 
-            // Réessayer jusqu’à 3 fois en cas de stale element
-            for (int attempt = 1; attempt <= 3; attempt++) {
-                try {
-                    WebElement article = driver.findElement(articleSelector);
-                    PostRecord post = postParser.extractPostDetails(article);
-                    log.info("Successfully fetched and parsed post dated {}", post.postDate());
-                    return post;
-                } catch (StaleElementReferenceException e) {
-                    log.warn("Attempt {}: Stale element reference, retrying...", attempt);
-                    Thread.sleep(500); // petite pause avant retry
+            // Ici on encapsule toute la logique de parsing du post dans une lambda
+            return loginRedirectHandler.handleLoginIfRedirected(driver, () -> {
+                wait.until(ExpectedConditions.visibilityOfElementLocated(articleSelector));
+
+                for (int attempt = 1; attempt <= 3; attempt++) {
+                    try {
+                        WebElement article = driver.findElement(articleSelector);
+                        PostRecord post = postParser.extractPostDetails(article);
+                        log.info("Successfully fetched and parsed post dated {}", post.postDate());
+                        return post;
+                    } catch (StaleElementReferenceException e) {
+                        log.warn("Attempt {}: Stale element reference, retrying...", attempt);
+                        ThreadUtil.sleep(attempt*500);
+                    }
                 }
-            }
 
-            log.error("Failed to fetch post after multiple attempts due to stale elements.");
-            return null;
+                log.error("Failed to fetch post after multiple attempts due to stale elements.");
+                return null;
+            });
 
         } catch (Exception e) {
             log.error("Erreur inattendue lors du fetch de {}", postUrl, e);
             return null;
         } finally {
             try {
+                ThreadUtil.sleepRandomBetween(1000, 3000);
                 driver.close();
                 driver.switchTo().window(originalHandle);
             } catch (Exception e) {
