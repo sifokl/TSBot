@@ -49,7 +49,12 @@ public class TalkSpiritPostFetcherService {
 
             // Ici on encapsule toute la logique de parsing du post dans une lambda
             return loginRedirectHandler.handleLoginIfRedirected(driver, () -> {
+
+                log.info("Current  before Wait: {}", driver.getCurrentUrl()); // 🔍 Log de l'URL actuelle
+
                 wait.until(ExpectedConditions.visibilityOfElementLocated(articleSelector));
+
+                log.info("Current  after Wait: {}", driver.getCurrentUrl()); // 🔍 Log de l'URL actuelle
 
                 for (int attempt = 1; attempt <= 3; attempt++) {
                     try {
